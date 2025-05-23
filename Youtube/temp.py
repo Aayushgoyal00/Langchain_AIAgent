@@ -2,15 +2,22 @@ from google import genai
 from google.genai import types
 import dotenv
 import os
+
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound,TranscriptsDisabled # Added TranscriptsDisabled and NoTranscriptFound
 # Load environment variables from .env file
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 dotenv.load_dotenv()
 
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"E:\Langchain\gen-lang-client-0553051082-a99cbe5d72c5.json" # Using raw string for Windows path
 
-video_id = "etnLX7m2MiA"  # Replace with your YouTube video ID
+video_id = "8afhcpiMh24"  # Replace with your YouTube video ID
 full_transcript_text = "" # Initialize full_transcript_text
+# embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-exp-03-07")
+embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
+
 
 try:
     # List all available transcripts for the video
@@ -30,7 +37,7 @@ try:
         try:
             transcript = list_of_transcripts_obj.find_generated_transcript(['en'])
             target_transcript_segments = transcript.fetch()
-            # print(target_transcript_segments)
+            # print(target_transcript_segments.to_raw_data())
             print("Fetched auto-generated English transcript.")
         except NoTranscriptFound:
             print("No auto-generated English transcript found. Trying to translate an original.")
@@ -43,6 +50,7 @@ try:
                         translated_transcript_obj = original_transcript_meta.translate('en')
                         target_transcript_segments = translated_transcript_obj.fetch()
                         print(f"Successfully translated and fetched transcript from '{original_transcript_meta.language_code}' to 'en'.")
+                        # print(target_transcript_segments.to_raw_data())
                         found_original_to_translate = True
                         break 
                     except Exception as e_translate:
@@ -65,9 +73,16 @@ except Exception as e:
     print(f"Error fetching transcript: {e}")
 
 
-splitter =RecursiveCharacterTextSplitter(
+splitter = RecursiveCharacterTextSplitter(
     chunk_size=1000,
     chunk_overlap=200,
 )
 chunks = splitter.create_documents([full_transcript_text])
-print(f"Number of chunks: {len(chunks)}")
+print(f"Created {len(chunks)} document chunks")
+
+# Extract the text content from each Document object
+texts = [doc.page_content for doc in chunks]
+vectors = embeddings.embed_documents(texts,output_dimensionality=10)
+
+print(f"Number of chunks: {chunks}")
+print(f"Number of vectors: {vectors}") 
