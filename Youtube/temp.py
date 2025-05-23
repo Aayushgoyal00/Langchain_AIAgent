@@ -17,7 +17,7 @@ dotenv.load_dotenv()
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"E:\Langchain\gen-lang-client-0553051082-a99cbe5d72c5.json" # Using raw string for Windows path
 
-video_id = "LVrQcTfm4pc"  # Replace with your YouTube video ID
+video_id = "NvZEZ-mZsuI"  # Replace with your YouTube video ID
 full_transcript_text = "" # Initialize full_transcript_text
 # embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-exp-03-07")
 embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
@@ -41,6 +41,7 @@ prompt=PromptTemplate(
     "Question: {question}",
 )
 parser=StrOutputParser()
+
 def format_docs(docs):
     # Format the documents for output
     context="\n\n".join([doc.page_content for doc in docs])
@@ -135,7 +136,7 @@ if chunks:
     })
 
     main_chain=parallel_chain |prompt| llm|parser
-    final_result=main_chain.invoke('does this context contain any discussion about the working of carry minati?')
+    final_result=main_chain.invoke('What is the role of the `send` function in socket communication?')
     print(f"Final Result: {final_result}")
 
 else:
