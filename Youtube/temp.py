@@ -2,7 +2,7 @@ from google import genai
 from google.genai import types
 import dotenv
 import os
-
+from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound,TranscriptsDisabled # Added TranscriptsDisabled and NoTranscriptFound
@@ -10,6 +10,9 @@ from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound,Trans
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.runnables import RunnableParallel,RunnablePassthrough,RunnableLambda
+from langchain_core.output_parsers import StrOutputParser
 dotenv.load_dotenv()
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"E:\Langchain\gen-lang-client-0553051082-a99cbe5d72c5.json" # Using raw string for Windows path
@@ -18,7 +21,30 @@ video_id = "LVrQcTfm4pc"  # Replace with your YouTube video ID
 full_transcript_text = "" # Initialize full_transcript_text
 # embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-exp-03-07")
 embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.0-flash",
+    temperature=0.2,
+    max_tokens=None,
+    timeout=None,
+    max_retries=2,
+    # other params...
+)
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200,
+)
+prompt=PromptTemplate(
+    input_variables=["context", "question"],
+    template="You are an assistant." \
+    "Answer only from the given context and if the context given to you is insufficient then just say you don't know." \
+    "Context: {context}" \
+    "Question: {question}",
+)
+parser=StrOutputParser()
+def format_docs(docs):
+    # Format the documents for output
+    context="\n\n".join([doc.page_content for doc in docs])
+    return context
 
 try:
     # List all available transcripts for the video
@@ -74,19 +100,9 @@ except Exception as e:
     print(f"Error fetching transcript: {e}")
 
 
-splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1000,
-    chunk_overlap=200,
-)
+
 chunks = splitter.create_documents([full_transcript_text])
 print(f"Created {len(chunks)} document chunks")
-
-# # Extract the text content from each Document object
-# texts = [doc.page_content for doc in chunks]
-# vectors = embeddings.embed_documents(texts,output_dimensionality=10)
-
-# print(f"Number of chunks: {chunks}")
-# print(f"Number of vectors: {vectors}") 
 
 # Assign unique IDs to each chunk
 chunk_ids = [f"chunk_{i}" for i in range(len(chunks))]
@@ -100,19 +116,27 @@ if chunks:
         # ids=chunk_ids  # Assign unique IDs to each document
     )
     print(f"Stored {len(chunks)} vectors in FAISS vector store")
-    # print(f"Vector store: {vector_store}")
-    # Example: Perform a similarity search
-    query = "What is the main topic of the video?"
-    # query_embedding = embeddings.embed_query(query)
-    # print(f"Query embedding: {query_embedding}")
-    # Search for the top 3 most similar chunks
-    # results = vector_store.similarity_search_with_score(query=query, k=3)
+
+    question = "Is there any discussion about the deep learning in this context?"
     retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 3})
-    results = retriever.invoke(query)
-    print(f"Found {results} similar chunks")
-    # print("\nTop 3 similar chunks:")
-    # for doc, score in results:
-    #     print(f"Chunk ID: {doc.id}, Score: {score}")
-    #     print(f"Content: {doc.page_content}")  # Print first 200 chars of each chunk
+    # results = retriever.invoke(question)
+    # print(f"Found {results} similar chunks")
+    # context="\n\n".join([doc.page_content for doc in results])
+
+    # final_prompt = prompt.invoke({"context": context, "question": question})
+    # print(f"Final Prompt: {final_prompt}")
+    # answer = llm.invoke(final_prompt)
+    # print(f"Answer: {answer}")
+
+
+    parallel_chain=RunnableParallel({
+        'context':retriever|RunnableLambda(format_docs),
+        'question':RunnablePassthrough()
+    })
+
+    main_chain=parallel_chain |prompt| llm|parser
+    final_result=main_chain.invoke('does this context contain any discussion about the working of carry minati?')
+    print(f"Final Result: {final_result}")
+
 else:
     print("No chunks to store in FAISS.")
