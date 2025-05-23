@@ -12,7 +12,7 @@ from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, Tran
 dotenv.load_dotenv()
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"E:\Langchain\gen-lang-client-0553051082-a99cbe5d72c5.json"
 
-video_id = "IpvBrSsKoAY"  # Replace with your YouTube video ID
+video_id = "EzYaFF7ahKw"  # Replace with your YouTube video ID
 embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.0-flash",
@@ -98,7 +98,7 @@ try:
                 doc = Document(page_content=page_content)
                 documents.append(doc)
         print(f"Created {len(documents)} document chunks")
-
+        # print(documents) 
         # Create FAISS vector store
         vector_store = FAISS.from_documents(documents, embeddings)
         print(f"Stored {len(documents)} vectors in FAISS vector store")
@@ -107,11 +107,16 @@ try:
         retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 3})
 
         # Updated prompt to include timestamp instructions
-        prompt = PromptTemplate(
-            input_variables=["context", "question"],
-            template="You are an assistant. Answer the question based on the following context, which includes timestamps and transcript text in the format [MM:SS - MM:SS]. Include the relevant timestamps in your answer. If the context is insufficient to answer the question, say 'I don't know' and suggest checking the start of the video at 00:00. List all relevant timestamps if the answer appears in multiple places.\n\nContext: {context}\n\nQuestion: {question}",
-        )
-
+        # prompt = PromptTemplate(
+        #     input_variables=["context", "question"],
+        #     template="You are an assistant. Answer the question based on the following context, which includes timestamps and transcript text in the format [MM:SS - MM:SS]. Include the relevant timestamps in your answer. If the context is insufficient to answer the question, say 'I don't know' . List all relevant timestamps if the answer appears in multiple places.\n\nContext: {context}\n\nQuestion: {question}",
+        # )
+        prompt=PromptTemplate(
+        input_variables=["context", "question"],
+        template="You are an assistant." \
+        "Answer only from the given context and if the context given to you is insufficient then just say you don't know." \
+        "Context: {context}" \
+        "Question: {question}",)
         # Set up processing chain
         parallel_chain = RunnableParallel({
             'context': retriever | RunnableLambda(format_docs),
@@ -121,7 +126,7 @@ try:
         main_chain = parallel_chain | prompt | llm | StrOutputParser()
         
         # Example question
-        final_result = main_chain.invoke('where does she talk about the negative impact of ai ?')
+        final_result = main_chain.invoke('what are the topics discussed in the video ?')
         print(f"Final Result: {final_result}")
 
     else:
